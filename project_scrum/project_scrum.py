@@ -269,7 +269,7 @@ class projectScrumProductBacklog(osv.osv):
             if match:
                 ids = self.search(cr, uid, [('sprint_id','=', int(match.group(1)))], limit=limit, context=context)
                 return self.name_get(cr, uid, ids, context=context)
-        return super(projectScrumProductBacklog, self).name_search(cr, uid, name, args, operator,context, limit=limit)
+        return super(projectScrumProductBacklog, self).name_search(cr, uid, name, args=args, operator=operator,context=context, limit=limit)
 
     def _compute(self, cr, uid, ids, fields, arg, context=None):
         res = {}.fromkeys(ids, 0.0)
