@@ -26,6 +26,9 @@
                     <page string="Goal" attrs="{'invisible':[('is_scrum', '=', False)]}">
                         <field name="goal"/>
                     </page>
+		    <page string="Backlog stages" attrs="{'invisible':[('is_scrum', '=', False)]}">
+                        <field name="pb_stage_ids"/>
+                    </page>
                 </page>
             </field>
         </record>
