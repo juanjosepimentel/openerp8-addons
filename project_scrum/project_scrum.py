@@ -75,6 +75,10 @@ class projectScrumSprint(osv.osv):
         
         for (id, name) in self.name_get(cr, uid, ids):
             res = self._verify_if_user_stories_in(cr, uid, [id])
+            one_sprint_open = self._check_only_one_open(cr, uid, [id])
+            
+            if not one_sprint_open:
+                raise osv.except_osv(_('Warning !'), _("You can not open sprint if one is already open for the same project and the same release"))
             if not res:
                 raise osv.except_osv(_('Warning !'), _("You can not open sprint with no stories affected in"))
             else:
@@ -171,8 +175,17 @@ class projectScrumSprint(osv.osv):
                     return False
         return True
 
+    def _check_only_one_open(self, cr, uid, ids, context=None):
+        # Only one sprint can be open byt project_id/release_id
+        for sprint in self.browse(cr, uid, ids, context=context):
+            opened_sprint_ids = self.search(cr, uid, [('project_id', '=', sprint.project_id.id),('state','=','open'),('release_id','=', sprint.release_id.id)])
+	    if len(opened_sprint_ids) > 0:
+                return False 
+        return True
+
     _constraints = [
-        (_check_dates, 'Error! sprint start-date must be lower than project end-date.', ['date_start', 'date_stop'])
+        (_check_dates, 'Error! sprint start-date must be lower than project end-date.', ['date_start', 'date_stop']),
+        (_check_only_one_open, 'Error! you must close the Opened sprint before starting new one', [])
     ]
 
 class projectScrumMeeting(osv.osv):
@@ -437,6 +450,7 @@ class projectTaskInherit(osv.osv):
                 'project.task': (lambda self, cr, uid, ids, c={}: ids, ['product_backlog_id'], 10),
                 'project.scrum.product.backlog': (_get_task, ['sprint_id'], 10)
             }),
+        'release_id': fields.related('sprint_id','release_id', type='many2one', relation='project.scrum.release', string='Release', store=True),
         #'work_ids': fields.one2many('project.task.work', 'task_id', 'Work'),
         #'pb_role': fields.related('product_id', 'role_id', type='many2one', string="Role", relation="project.scrum.role", readonly=True),
         #'pb_description': fields.related('product_id', 'description', type='text', string="Description", relation="project.scrum.role", readonly=True),
