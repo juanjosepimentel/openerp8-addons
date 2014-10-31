@@ -241,26 +241,65 @@ class projectScrumPBStage(osv.osv):
     """ Category of Product Backlog """
     _name = "project.scrum.pb.stage"
     _description = "Product Backlog Stage"
+
+    def _get_default_project_ids(self, cr, uid, ctx={}):
+        project_id = self.pool['project.scrum.product.backlog']._get_default_project_id(cr, uid, context=ctx)
+        if project_id:
+            return [project_id]
+        return None
+
     _columns = {
         'name': fields.char('Stage Name', translate=True, required=True),
         'sequence': fields.integer('Sequence', help="Used to order the story stages"),
         'user_id': fields.many2one('res.users', 'Owner', help="Owner of the note stage.", required=True),
-        'project_id': fields.many2one('project.project', 'Project', help="Project of the story stage.", required=True),
-        'fold': fields.boolean('Folded by Default'),
+	#FIX: think we should remove this
+        'project_id': fields.many2one('project.project', 'Project', help="Project of the story stage.", required=False),
+        'case_default': fields.boolean('Default for New Projects',
+                        help="If you check this field, this stage will be proposed by default on each new project. It will not assign this stage to existing projects."),
+        'project_ids': fields.many2many('project.project', 'project_scrum_backlog_stage_rel', 'stage_id', 'project_id', 'Projects'),
+	'fold': fields.boolean('Folded by Default'),
     }
-    _order = 'project_id asc, sequence asc'
+    _order = 'sequence asc'
     _defaults = {
         'fold': 0,
         'user_id': lambda self, cr, uid, ctx: uid,
         'sequence' : 1,
+	'project_ids': _get_default_project_ids,
     }
 
 
 class projectScrumProductBacklog(osv.osv):
     _name = 'project.scrum.product.backlog'
     _description = "Product backlog where are user stories"
-    _inherit = ['mail.thread']
-    
+    _inherit = ['mail.thread', 'ir.needaction_mixin']
+    _track = {
+        'stage_id': {
+            # this is only an heuristics; depending on your particular stage configuration it may not match all 'new' stages
+            'project.mt_backlog_new': lambda self, cr, uid, obj, ctx=None: obj.stage_id and obj.stage_id.sequence <= 1,
+            'project.mt_backlog_stage': lambda self, cr, uid, obj, ctx=None: obj.stage_id.sequence > 1,
+        },
+    }
+
+    def _get_default_project_id(self, cr, uid, context=None):
+        """ Gives default section by checking if present in the context """
+        return (self._resolve_project_id_from_context(cr, uid, context=context) or False)
+
+    def _resolve_project_id_from_context(self, cr, uid, context=None):
+        """ Returns ID of project based on the value of 'default_project_id'
+            context key, or None if it cannot be resolved to a single
+            project.
+        """
+        if context is None:
+            context = {}
+        if type(context.get('default_project_id')) in (int, long):
+            return context['default_project_id']
+        if isinstance(context.get('default_project_id'), basestring):
+            project_name = context['default_project_id']
+            project_ids = self.pool.get('project.project').name_search(cr, uid, name=project_name, context=context)
+            if len(project_ids) == 1:
+                return project_ids[0][0]
+        return None
+
     def name_search(self, cr, uid, name, args=None, operator='ilike', context=None, limit=100):
         if not args:
             args=[]
@@ -269,7 +308,7 @@ class projectScrumProductBacklog(osv.osv):
             if match:
                 ids = self.search(cr, uid, [('sprint_id','=', int(match.group(1)))], limit=limit, context=context)
                 return self.name_get(cr, uid, ids, context=context)
-        return super(projectScrumProductBacklog, self).name_search(cr, uid, name, args, operator,context, limit=limit)
+        return super(projectScrumProductBacklog, self).name_search(cr, uid, name, args=args, operator=operator,context=context, limit=limit)
 
     def _compute(self, cr, uid, ids, fields, arg, context=None):
         res = {}.fromkeys(ids, 0.0)
@@ -345,7 +384,8 @@ class projectScrumProductBacklog(osv.osv):
         'value_to_user': fields.integer("Value to user"),
         
         'state': fields.selection(BACKLOG_STATES, 'State', required=True),
-        'stage_id':fields.many2one('project.scrum.pb.stage', 'Stage'),
+        'stage_id': fields.many2one('project.scrum.pb.stage', 'Stage', track_visibility='onchange', select=True,
+                        domain="[('project_ids', '=', project_id)]", copy=False),
         'open': fields.boolean('Active', track_visibility='onchange'),
         'date_open': fields.date("Date open"),
         'date_done': fields.date("Date done"),
