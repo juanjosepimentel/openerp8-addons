@@ -156,6 +156,7 @@
             </field>
         </record>
         <record model="ir.actions.act_window" id="action_meeting_form">
+            <field name="name">Meetings</field>
             <field name="res_model">project.scrum.meeting</field>
             <field name="view_type">form</field>
             <field name="view_mode">tree,form,calendar</field>
